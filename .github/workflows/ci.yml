@@ -1,0 +1,56 @@
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: uv sync --all-extras
+            
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short
+
+  build-and-publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and setup the python version
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the project
+        run: uv sync
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Publish package
+        run: uv publish
