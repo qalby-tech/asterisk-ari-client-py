@@ -2,8 +2,6 @@ import asyncio
 import websockets
 from .models.events import Event, EventType
 from .models.events import StasisStartEvent, StasisEndEvent
-from .models.bridge import Bridge
-from .models.channels import Channel
 from .controller import AriClientController
 import logging
 from typing import Callable, Awaitable, Optional, Type
@@ -73,14 +71,16 @@ class AriClient:
                         if self.controller:
                             stasis_start_event.channel.add_handlers(
                                 answer_handler=self.controller.answer_channel,
-                                stop_handler=self.controller.stop_channel
+                                stop_handler=self.controller.stop_channel,
+                                dial_handler=self.controller.dial
                             )
                     elif event.type == EventType.STASIS_END:
                         stasis_end_event: StasisEndEvent = await self.__dispatch(message, StasisEndEvent, self.stasis_end_handler)
                         if self.controller:
                             stasis_end_event.channel.add_handlers(
                                 answer_handler=self.controller.answer_channel,
-                                stop_handler=self.controller.stop_channel
+                                stop_handler=self.controller.stop_channel,
+                                dial_handler=self.controller.dial
                             )
                     else:
                         logger.debug(f"Received unknown event: {event}")

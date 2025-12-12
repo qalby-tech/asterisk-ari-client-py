@@ -274,10 +274,12 @@ class TestChannel:
         """Test creating channel with handlers"""
         answer_handler = AsyncMock()
         stop_handler = AsyncMock()
+        dial_handler = AsyncMock()
         
         channel = Channel.create_with_handlers(
             answer_handler=answer_handler,
             stop_handler=stop_handler,
+            dial_handler=dial_handler,
             obj=sample_channel_data
         )
         
@@ -288,10 +290,12 @@ class TestChannel:
         """Test answering a channel"""
         answer_handler = AsyncMock()
         stop_handler = AsyncMock()
+        dial_handler = AsyncMock()
         
         channel = Channel.create_with_handlers(
             answer_handler=answer_handler,
             stop_handler=stop_handler,
+            dial_handler=dial_handler,
             obj=sample_channel_data
         )
         
@@ -304,10 +308,12 @@ class TestChannel:
         """Test stopping a channel"""
         answer_handler = AsyncMock()
         stop_handler = AsyncMock()
+        dial_handler = AsyncMock()
         
         channel = Channel.create_with_handlers(
             answer_handler=answer_handler,
             stop_handler=stop_handler,
+            dial_handler=dial_handler,
             obj=sample_channel_data
         )
         
@@ -328,10 +334,12 @@ class TestChannel:
         channel = Channel.model_validate(sample_channel_data)
         answer_handler = AsyncMock()
         stop_handler = AsyncMock()
+        dial_handler = AsyncMock()
         
         channel.add_handlers(
             answer_handler=answer_handler,
-            stop_handler=stop_handler
+            stop_handler=stop_handler,
+            dial_handler=dial_handler
         )
         
         # Handlers should be set (we can't directly check private attrs, but we can test via methods)

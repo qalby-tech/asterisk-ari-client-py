@@ -34,6 +34,7 @@ class Channel(BaseModel):
 
     __answer_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
     __stop_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
+    __dial_handler: Optional[Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
@@ -50,21 +51,25 @@ class Channel(BaseModel):
         cls,
         answer_handler: Callable[[str], Awaitable[None]],
         stop_handler: Callable[[str], Awaitable[None]],
+        dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
         obj: dict
     ) -> "Channel":
         channel = cls.model_validate(obj)
         channel.__answer_handler = answer_handler
         channel.__stop_handler = stop_handler
+        channel.__dial_handler = dial_handler
         return channel
     
     def add_handlers(
         self,
         answer_handler: Callable[[str], Awaitable[None]],
-        stop_handler: Callable[[str], Awaitable[None]]
+        stop_handler: Callable[[str], Awaitable[None]],
+        dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]]
     ):
         """Add handlers to the channel for performing actions"""
         self.__answer_handler = answer_handler
         self.__stop_handler = stop_handler
+        self.__dial_handler = dial_handler
     
     async def answer(self):
         if self.__answer_handler is None:
@@ -75,3 +80,18 @@ class Channel(BaseModel):
         if self.__stop_handler is None:
             raise ValueError("Stop handler not set")
         await self.__stop_handler(self.id)
+    
+    async def dial(self, caller: Optional[str] = None, timeout: Optional[int] = None) -> "Channel":
+        """
+        Dial this channel from another channel or start the dial process.
+        
+        Args:
+            caller: Channel ID of the calling channel
+            timeout: Dial timeout in seconds
+            
+        Returns:
+            Channel object (may be updated channel state)
+        """
+        if self.__dial_handler is None:
+            raise ValueError("Dial handler not set")
+        return await self.__dial_handler(self.id, caller, timeout)
