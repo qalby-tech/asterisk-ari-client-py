@@ -11,8 +11,7 @@ class AriClientController:
 
     async def create_channel(
         self, 
-        endpoint: str, 
-        app: str, 
+        endpoint: str,  
         app_args: Optional[str] = None,
         channel_id: Optional[str] = None,
         originator: Optional[str] = None, 
@@ -22,7 +21,7 @@ class AriClientController:
         ) -> Channel:
         payload = {
             "endpoint": endpoint,
-            "app": app,
+            "app": self.app,
         }
         if app_args:
             payload["app_args"] = app_args
@@ -37,7 +36,7 @@ class AriClientController:
         if variables:
             payload["variables"] = variables
         response = await self.client.post(f"/channels/create", json=payload)
-        if response.status_code != 200:
+        if response.status_code >= 300:
             raise Exception(f"Failed to create channel: {response.status_code} {response.text}")
         return Channel.create_with_handlers(
             answer_handler=self.answer_channel,
@@ -292,13 +291,9 @@ class AriClientController:
         if timeout:
             payload["timeout"] = timeout
         response = await self.client.post(f"/channels/{channel_id}/dial", json=payload)
-        response.raise_for_status()
-        return Channel.create_with_handlers(
-            answer_handler=self.answer_channel,
-            stop_handler=self.stop_channel,
-            dial_handler=self.dial,
-            obj=response.json()
-        )
+        if response.status_code >= 300:
+            raise Exception(f"Failed to dial channel: {response.status_code} {response.text}")
+        return None
     
     async def continue_in_dialplan(
         self, 

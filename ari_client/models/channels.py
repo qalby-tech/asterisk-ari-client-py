@@ -81,7 +81,7 @@ class Channel(BaseModel):
             raise ValueError("Stop handler not set")
         await self.__stop_handler(self.id)
     
-    async def dial(self, caller: Optional[str] = None, timeout: Optional[int] = None) -> "Channel":
+    async def dial(self, caller: Optional[str] = None, timeout: Optional[int] = None) -> None:
         """
         Dial this channel from another channel or start the dial process.
         
