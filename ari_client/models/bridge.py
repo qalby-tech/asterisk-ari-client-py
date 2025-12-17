@@ -54,7 +54,7 @@ class Bridge(BaseModel):
         bridge.__add_channel_handler = add_channel_handler
         return bridge
     
-    async def stop(self):
+    async def hangup(self):
         if self.__stop_handler is None:
             raise ValueError("Stop handler not set")
         await self.__stop_handler(self.id)
