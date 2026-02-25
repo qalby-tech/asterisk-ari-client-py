@@ -28,7 +28,7 @@ wheels = [
 
 [[package]]
 name = "ari-client"
-version = "0.2.0"
+version = "0.3.1"
 source = { virtual = "." }
 dependencies = [
     { name = "httpx" },
@@ -36,8 +36,8 @@ dependencies = [
     { name = "websockets" },
 ]
 
-[package.optional-dependencies]
-testing = [
+[package.dev-dependencies]
+dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -47,12 +47,15 @@ testing = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pytest", marker = "extra == 'testing'", specifier = ">=8.4.2" },
-    { name = "pytest-asyncio", marker = "extra == 'testing'", specifier = ">=0.21.0" },
-    { name = "pytest-cov", marker = "extra == 'testing'", specifier = ">=4.1.0" },
     { name = "websockets", specifier = ">=15.0.1" },
 ]
-provides-extras = ["testing"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest-asyncio", specifier = ">=0.21.0" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
+]
 
 [[package]]
 name = "backports-asyncio-runner"

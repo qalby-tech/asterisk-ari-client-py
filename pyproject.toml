@@ -1,6 +1,6 @@
 [project]
 name = "ari_client"
-version = "0.2.6"
+version = "0.3.1"
 description = "asyncio native asterisk client for python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -11,8 +11,8 @@ dependencies = [
 ]
 
 
-[project.optional-dependencies]
-testing = [
+[dependency-groups]
+dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0"

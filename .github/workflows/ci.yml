@@ -31,7 +31,7 @@ jobs:
           version: "latest"
       
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync
             
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
@@ -50,7 +50,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install the project
-        run: uv sync
+        run: uv sync --no-dev
 
       - name: Build wheel
         run: uv build

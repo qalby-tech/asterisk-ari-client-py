@@ -24,13 +24,13 @@ class AriClientController:
             "app": self.app,
         }
         if app_args:
-            payload["app_args"] = app_args
+            payload["appArgs"] = app_args
         if channel_id:
-            payload["channel_id"] = channel_id
+            payload["channelId"] = channel_id
         if originator:
             payload["originator"] = originator
         if other_channel_id:
-            payload["other_channel_id"] = other_channel_id
+            payload["otherChannelId"] = other_channel_id
         if formats:
             payload["formats"] = formats
         if variables:
@@ -110,7 +110,7 @@ class AriClientController:
             "direction": direction
         }
         if channel_id:
-            payload["channel_id"] = channel_id
+            payload["channelId"] = channel_id
         if variables:
             payload["variables"] = variables
         if data:

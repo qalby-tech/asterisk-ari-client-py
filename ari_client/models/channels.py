@@ -76,7 +76,7 @@ class Channel(BaseModel):
             raise ValueError("Answer handler not set")
         await self.__answer_handler(self.id)
     
-    async def hangup(self):
+    async def stop(self):
         if self.__stop_handler is None:
             raise ValueError("Stop handler not set")
         await self.__stop_handler(self.id)
