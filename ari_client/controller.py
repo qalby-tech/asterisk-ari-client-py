@@ -2,6 +2,7 @@ from httpx import AsyncClient
 from typing import Optional, Literal
 from .models.bridge import Bridge
 from .models.channels import Channel
+from .models.recording import LiveRecording
 
 class AriClientController:
 
@@ -42,6 +43,7 @@ class AriClientController:
             answer_handler=self.answer_channel,
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
+            record_handler=self.record_channel,
             obj=response.json()
         )
     
@@ -71,6 +73,7 @@ class AriClientController:
         return Bridge.create_with_handlers(
             stop_handler=self.stop_bridge,
             add_channel_handler=self.bridge_add_channel,
+            record_handler=self.record_bridge,
             obj=response.json()
         )
     
@@ -122,6 +125,7 @@ class AriClientController:
             answer_handler=self.answer_channel,
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
+            record_handler=self.record_channel,
             obj=response.json()
         )
     
@@ -202,6 +206,7 @@ class AriClientController:
             answer_handler=self.answer_channel,
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
+            record_handler=self.record_channel,
             obj=response.json()
         )
     
@@ -280,6 +285,7 @@ class AriClientController:
             answer_handler=self.answer_channel,
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
+            record_handler=self.record_channel,
             obj=response.json()
         )
     
@@ -314,4 +320,125 @@ class AriClientController:
             payload["label"] = label
         response = await self.client.post(f"/channels/{channel_id}/continue", json=payload)
         response.raise_for_status()
+        return None
+
+    async def record_bridge(
+        self,
+        bridge_id: str,
+        name: str,
+        format: str,
+        recorder_format: Optional[str] = None,
+        max_duration_seconds: Optional[int] = None,
+        max_silence_seconds: Optional[int] = None,
+        if_exists: Optional[Literal["fail", "overwrite", "append"]] = None,
+        beep: Optional[bool] = None,
+        terminate_on: Optional[Literal["none", "any", "*", "#"]] = None,
+    ) -> LiveRecording:
+        """
+        Start a recording on a bridge (POST /bridges/{bridgeId}/record).
+
+        Records the mixed audio from all channels participating in the bridge.
+
+        Args:
+            bridge_id: Bridge's id (required)
+            name: Recording's filename (required)
+            format: Format to encode audio in (required)
+            recorder_format: Format of the 'Recorder' channel attached to the bridge
+            max_duration_seconds: Maximum duration of the recording, in seconds. 0 for no limit
+            max_silence_seconds: Maximum duration of silence, in seconds. 0 for no limit
+            if_exists: Action to take if a recording with the same name already exists (default: fail)
+            beep: Play beep when recording begins
+            terminate_on: DTMF input to terminate recording (default: none)
+
+        Returns:
+            LiveRecording: The live recording object
+        """
+        params: dict = {
+            "name": name,
+            "format": format,
+        }
+        if recorder_format is not None:
+            params["recorderFormat"] = recorder_format
+        if max_duration_seconds is not None:
+            params["maxDurationSeconds"] = max_duration_seconds
+        if max_silence_seconds is not None:
+            params["maxSilenceSeconds"] = max_silence_seconds
+        if if_exists is not None:
+            params["ifExists"] = if_exists
+        if beep is not None:
+            params["beep"] = beep
+        if terminate_on is not None:
+            params["terminateOn"] = terminate_on
+
+        response = await self.client.post(f"/bridges/{bridge_id}/record", params=params)
+        if response.status_code >= 300:
+            raise Exception(f"Failed to record bridge: {response.status_code} {response.text}")
+        return LiveRecording.create_with_handlers(
+            stop_handler=self.stop_recording,
+            obj=response.json()
+        )
+
+    async def record_channel(
+        self,
+        channel_id: str,
+        name: str,
+        format: str,
+        max_duration_seconds: Optional[int] = None,
+        max_silence_seconds: Optional[int] = None,
+        if_exists: Optional[Literal["fail", "overwrite", "append"]] = None,
+        beep: Optional[bool] = None,
+        terminate_on: Optional[Literal["none", "any", "*", "#"]] = None,
+    ) -> LiveRecording:
+        """
+        Start a recording on a channel (POST /channels/{channelId}/record).
+
+        Record audio from a channel. Note that this will not capture audio sent
+        to the channel. The bridge itself has a record feature if that's what you want.
+
+        Args:
+            channel_id: Channel's id (required)
+            name: Recording's filename (required)
+            format: Format to encode audio in (required)
+            max_duration_seconds: Maximum duration of the recording, in seconds. 0 for no limit
+            max_silence_seconds: Maximum duration of silence, in seconds. 0 for no limit
+            if_exists: Action to take if a recording with the same name already exists (default: fail)
+            beep: Play beep when recording begins
+            terminate_on: DTMF input to terminate recording (default: none)
+
+        Returns:
+            LiveRecording: The live recording object
+        """
+        params: dict = {
+            "name": name,
+            "format": format,
+        }
+        if max_duration_seconds is not None:
+            params["maxDurationSeconds"] = max_duration_seconds
+        if max_silence_seconds is not None:
+            params["maxSilenceSeconds"] = max_silence_seconds
+        if if_exists is not None:
+            params["ifExists"] = if_exists
+        if beep is not None:
+            params["beep"] = beep
+        if terminate_on is not None:
+            params["terminateOn"] = terminate_on
+
+        response = await self.client.post(f"/channels/{channel_id}/record", params=params)
+        if response.status_code >= 300:
+            raise Exception(f"Failed to record channel: {response.status_code} {response.text}")
+        return LiveRecording.create_with_handlers(
+            stop_handler=self.stop_recording,
+            obj=response.json()
+        )
+
+    async def stop_recording(self, recording_name: str):
+        """
+        Stop a live recording and store it (POST /recordings/live/{recordingName}/stop).
+
+        Args:
+            recording_name: The name of the recording (required)
+        """
+        response = await self.client.post(f"/recordings/live/{recording_name}/stop")
+        if response.status_code != 204:
+            raise Exception(f"Failed to stop recording: {response.status_code} {response.text}")
         return None

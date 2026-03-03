@@ -1,8 +1,12 @@
+from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, PrivateAttr
-from typing import List, Optional, Callable, Awaitable
+from typing import TYPE_CHECKING, List, Optional, Callable, Awaitable, Literal
 from datetime import datetime
 from enum import Enum
 import re
+
+if TYPE_CHECKING:
+    from .recording import LiveRecording
 
 
 class BridgeType(str, Enum):
@@ -31,6 +35,7 @@ class Bridge(BaseModel):
 
     __stop_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
     __add_channel_handler: Optional[Callable[[str, str], Awaitable[None]]] = PrivateAttr(default=None)
+    __record_handler: Optional[Callable[..., Awaitable["LiveRecording"]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
@@ -47,11 +52,13 @@ class Bridge(BaseModel):
         cls, 
         stop_handler: Callable[[str], Awaitable[None]],
         add_channel_handler: Callable[[str, str], Awaitable[None]],
+        record_handler: Callable[..., Awaitable["LiveRecording"]],
         obj: dict
     ) -> "Bridge":
         bridge = cls.model_validate(obj)
         bridge.__stop_handler = stop_handler
         bridge.__add_channel_handler = add_channel_handler
+        bridge.__record_handler = record_handler
         return bridge
     
     async def stop(self):
@@ -64,3 +71,45 @@ class Bridge(BaseModel):
             raise ValueError("Add channel handler not set")
         await self.__add_channel_handler(self.id, channel_id)
 
+    async def record(
+        self,
+        name: str,
+        format: str,
+        recorder_format: Optional[str] = None,
+        max_duration_seconds: Optional[int] = None,
+        max_silence_seconds: Optional[int] = None,
+        if_exists: Optional[Literal["fail", "overwrite", "append"]] = None,
+        beep: Optional[bool] = None,
+        terminate_on: Optional[Literal["none", "any", "*", "#"]] = None,
+    ) -> "LiveRecording":
+        """
+        Start a recording on this bridge.
+
+        Records the mixed audio from all channels participating in this bridge.
+
+        Args:
+            name: Recording's filename (required)
+            format: Format to encode audio in (required)
+            recorder_format: Format of the 'Recorder' channel attached to the bridge
+            max_duration_seconds: Maximum duration of the recording, in seconds. 0 for no limit
+            max_silence_seconds: Maximum duration of silence, in seconds. 0 for no limit
+            if_exists: Action to take if a recording with the same name already exists
+            beep: Play beep when recording begins
+            terminate_on: DTMF input to terminate recording
+
+        Returns:
+            LiveRecording: The live recording object
+        """
+        if self.__record_handler is None:
+            raise ValueError("Record handler not set")
+        return await self.__record_handler(
+            bridge_id=self.id,
+            name=name,
+            format=format,
+            recorder_format=recorder_format,
+            max_duration_seconds=max_duration_seconds,
+            max_silence_seconds=max_silence_seconds,
+            if_exists=if_exists,
+            beep=beep,
+            terminate_on=terminate_on,
+        )

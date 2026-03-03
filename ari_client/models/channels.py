@@ -1,7 +1,11 @@
+from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, PrivateAttr
-from typing import Optional, Callable, Awaitable
+from typing import TYPE_CHECKING, Optional, Callable, Awaitable, Literal
 from datetime import datetime
 import re
+
+if TYPE_CHECKING:
+    from .recording import LiveRecording
 
 
 class CallerID(BaseModel):
@@ -35,6 +39,7 @@ class Channel(BaseModel):
     __answer_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
     __stop_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
     __dial_handler: Optional[Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]]] = PrivateAttr(default=None)
+    __record_handler: Optional[Callable[..., Awaitable["LiveRecording"]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
@@ -52,24 +57,28 @@ class Channel(BaseModel):
         answer_handler: Callable[[str], Awaitable[None]],
         stop_handler: Callable[[str], Awaitable[None]],
         dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
+        record_handler: Callable[..., Awaitable["LiveRecording"]],
         obj: dict
     ) -> "Channel":
         channel = cls.model_validate(obj)
         channel.__answer_handler = answer_handler
         channel.__stop_handler = stop_handler
         channel.__dial_handler = dial_handler
+        channel.__record_handler = record_handler
         return channel
     
     def add_handlers(
         self,
         answer_handler: Callable[[str], Awaitable[None]],
         stop_handler: Callable[[str], Awaitable[None]],
-        dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]]
+        dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
+        record_handler: Callable[..., Awaitable["LiveRecording"]],
     ):
         """Add handlers to the channel for performing actions"""
         self.__answer_handler = answer_handler
         self.__stop_handler = stop_handler
         self.__dial_handler = dial_handler
+        self.__record_handler = record_handler
     
     async def answer(self):
         if self.__answer_handler is None:
@@ -95,3 +104,45 @@ class Channel(BaseModel):
         if self.__dial_handler is None:
             raise ValueError("Dial handler not set")
         return await self.__dial_handler(self.id, caller, timeout)
+
+    async def record(
+        self,
+        name: str,
+        format: str,
+        max_duration_seconds: Optional[int] = None,
+        max_silence_seconds: Optional[int] = None,
+        if_exists: Optional[Literal["fail", "overwrite", "append"]] = None,
+        beep: Optional[bool] = None,
+        terminate_on: Optional[Literal["none", "any", "*", "#"]] = None,
+    ) -> "LiveRecording":
+        """
+        Start a recording on this channel.
+
+        Record audio from this channel. Note that this will not capture audio
+        sent to the channel. The bridge itself has a record feature if that's
+        what you want.
+
+        Args:
+            name: Recording's filename (required)
+            format: Format to encode audio in (required)
+            max_duration_seconds: Maximum duration of the recording, in seconds. 0 for no limit
+            max_silence_seconds: Maximum duration of silence, in seconds. 0 for no limit
+            if_exists: Action to take if a recording with the same name already exists
+            beep: Play beep when recording begins
+            terminate_on: DTMF input to terminate recording
+
+        Returns:
+            LiveRecording: The live recording object
+        """
+        if self.__record_handler is None:
+            raise ValueError("Record handler not set")
+        return await self.__record_handler(
+            channel_id=self.id,
+            name=name,
+            format=format,
+            max_duration_seconds=max_duration_seconds,
+            max_silence_seconds=max_silence_seconds,
+            if_exists=if_exists,
+            beep=beep,
+            terminate_on=terminate_on,
+        )

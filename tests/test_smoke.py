@@ -280,6 +280,7 @@ class TestChannel:
             answer_handler=answer_handler,
             stop_handler=stop_handler,
             dial_handler=dial_handler,
+            record_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -296,6 +297,7 @@ class TestChannel:
             answer_handler=answer_handler,
             stop_handler=stop_handler,
             dial_handler=dial_handler,
+            record_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -314,6 +316,7 @@ class TestChannel:
             answer_handler=answer_handler,
             stop_handler=stop_handler,
             dial_handler=dial_handler,
+            record_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -335,11 +338,13 @@ class TestChannel:
         answer_handler = AsyncMock()
         stop_handler = AsyncMock()
         dial_handler = AsyncMock()
+        record_handler = AsyncMock()
         
         channel.add_handlers(
             answer_handler=answer_handler,
             stop_handler=stop_handler,
-            dial_handler=dial_handler
+            dial_handler=dial_handler,
+            record_handler=record_handler
         )
         
         # Handlers should be set (we can't directly check private attrs, but we can test via methods)
@@ -366,6 +371,7 @@ class TestBridge:
         bridge = Bridge.create_with_handlers(
             stop_handler=stop_handler,
             add_channel_handler=add_channel_handler,
+            record_handler=AsyncMock(),
             obj=sample_bridge_data
         )
         
@@ -380,6 +386,7 @@ class TestBridge:
         bridge = Bridge.create_with_handlers(
             stop_handler=stop_handler,
             add_channel_handler=add_channel_handler,
+            record_handler=AsyncMock(),
             obj=sample_bridge_data
         )
         
@@ -396,6 +403,7 @@ class TestBridge:
         bridge = Bridge.create_with_handlers(
             stop_handler=stop_handler,
             add_channel_handler=add_channel_handler,
+            record_handler=AsyncMock(),
             obj=sample_bridge_data
         )
         
