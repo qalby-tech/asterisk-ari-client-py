@@ -281,6 +281,7 @@ class TestChannel:
             stop_handler=stop_handler,
             dial_handler=dial_handler,
             record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -298,6 +299,7 @@ class TestChannel:
             stop_handler=stop_handler,
             dial_handler=dial_handler,
             record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -317,6 +319,7 @@ class TestChannel:
             stop_handler=stop_handler,
             dial_handler=dial_handler,
             record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -344,7 +347,8 @@ class TestChannel:
             answer_handler=answer_handler,
             stop_handler=stop_handler,
             dial_handler=dial_handler,
-            record_handler=record_handler
+            record_handler=record_handler,
+            snoop_handler=AsyncMock()
         )
         
         # Handlers should be set (we can't directly check private attrs, but we can test via methods)

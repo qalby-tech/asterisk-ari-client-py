@@ -40,6 +40,7 @@ class Channel(BaseModel):
     __stop_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
     __dial_handler: Optional[Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]]] = PrivateAttr(default=None)
     __record_handler: Optional[Callable[..., Awaitable["LiveRecording"]]] = PrivateAttr(default=None)
+    __snoop_handler: Optional[Callable[..., Awaitable["Channel"]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
@@ -58,6 +59,7 @@ class Channel(BaseModel):
         stop_handler: Callable[[str], Awaitable[None]],
         dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
         record_handler: Callable[..., Awaitable["LiveRecording"]],
+        snoop_handler: Callable[..., Awaitable["Channel"]],
         obj: dict
     ) -> "Channel":
         channel = cls.model_validate(obj)
@@ -65,6 +67,7 @@ class Channel(BaseModel):
         channel.__stop_handler = stop_handler
         channel.__dial_handler = dial_handler
         channel.__record_handler = record_handler
+        channel.__snoop_handler = snoop_handler
         return channel
     
     def add_handlers(
@@ -73,12 +76,14 @@ class Channel(BaseModel):
         stop_handler: Callable[[str], Awaitable[None]],
         dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
         record_handler: Callable[..., Awaitable["LiveRecording"]],
+        snoop_handler: Callable[..., Awaitable["Channel"]],
     ):
         """Add handlers to the channel for performing actions"""
         self.__answer_handler = answer_handler
         self.__stop_handler = stop_handler
         self.__dial_handler = dial_handler
         self.__record_handler = record_handler
+        self.__snoop_handler = snoop_handler
     
     async def answer(self):
         if self.__answer_handler is None:
@@ -145,4 +150,40 @@ class Channel(BaseModel):
             if_exists=if_exists,
             beep=beep,
             terminate_on=terminate_on,
+        )
+
+    async def snoop(
+        self,
+        spy: Optional[Literal["none", "both", "out", "in"]] = None,
+        whisper: Optional[Literal["none", "both", "out", "in"]] = None,
+        app_args: Optional[str] = None,
+        snoop_id: Optional[str] = None,
+    ) -> "Channel":
+        """
+        Start snooping (spy/whisper) on this channel.
+
+        Creates a new snooping channel that can spy on and/or whisper into
+        this channel's audio.
+
+        Args:
+            spy: Direction of audio to spy on (default: none).
+                 "none" - No spying. "both" - Both directions.
+                 "out" - Audio sent out. "in" - Audio coming in.
+            whisper: Direction of audio to whisper into (default: none).
+                     "none" - No whispering. "both" - Both directions.
+                     "out" - Audio sent out. "in" - Audio coming in.
+            app_args: The application arguments to pass to the Stasis application
+            snoop_id: Unique ID to assign to the snooping channel
+
+        Returns:
+            Channel: The newly created snooping channel
+        """
+        if self.__snoop_handler is None:
+            raise ValueError("Snoop handler not set")
+        return await self.__snoop_handler(
+            channel_id=self.id,
+            spy=spy,
+            whisper=whisper,
+            app_args=app_args,
+            snoop_id=snoop_id,
         )

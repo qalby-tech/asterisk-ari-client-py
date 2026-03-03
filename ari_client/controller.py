@@ -44,6 +44,7 @@ class AriClientController:
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
             record_handler=self.record_channel,
+            snoop_handler=self.snoop_channel,
             obj=response.json()
         )
     
@@ -126,6 +127,7 @@ class AriClientController:
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
             record_handler=self.record_channel,
+            snoop_handler=self.snoop_channel,
             obj=response.json()
         )
     
@@ -207,6 +209,7 @@ class AriClientController:
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
             record_handler=self.record_channel,
+            snoop_handler=self.snoop_channel,
             obj=response.json()
         )
     
@@ -286,6 +289,7 @@ class AriClientController:
             stop_handler=self.stop_channel,
             dial_handler=self.dial,
             record_handler=self.record_channel,
+            snoop_handler=self.snoop_channel,
             obj=response.json()
         )
     
@@ -428,6 +432,53 @@ class AriClientController:
             raise Exception(f"Failed to record channel: {response.status_code} {response.text}")
         return LiveRecording.create_with_handlers(
             stop_handler=self.stop_recording,
+            obj=response.json()
+        )
+
+    async def snoop_channel(
+        self,
+        channel_id: str,
+        spy: Optional[Literal["none", "both", "out", "in"]] = None,
+        whisper: Optional[Literal["none", "both", "out", "in"]] = None,
+        app_args: Optional[str] = None,
+        snoop_id: Optional[str] = None,
+    ) -> Channel:
+        """
+        Start snooping on a channel (POST /channels/{channelId}/snoop).
+
+        Snoop (spy/whisper) on a specific channel.
+
+        Args:
+            channel_id: Channel's id (required)
+            spy: Direction of audio to spy on (default: none)
+            whisper: Direction of audio to whisper into (default: none)
+            app_args: The application arguments to pass to the Stasis application
+            snoop_id: Unique ID to assign to snooping channel
+
+        Returns:
+            Channel: The snooping channel object
+        """
+        params: dict = {
+            "app": self.app,
+        }
+        if spy is not None:
+            params["spy"] = spy
+        if whisper is not None:
+            params["whisper"] = whisper
+        if app_args is not None:
+            params["appArgs"] = app_args
+        if snoop_id is not None:
+            params["snoopId"] = snoop_id
+
+        response = await self.client.post(f"/channels/{channel_id}/snoop", params=params)
+        if response.status_code >= 300:
+            raise Exception(f"Failed to snoop channel: {response.status_code} {response.text}")
+        return Channel.create_with_handlers(
+            answer_handler=self.answer_channel,
+            stop_handler=self.stop_channel,
+            dial_handler=self.dial,
+            record_handler=self.record_channel,
+            snoop_handler=self.snoop_channel,
             obj=response.json()
         )
 

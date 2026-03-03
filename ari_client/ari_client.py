@@ -73,7 +73,8 @@ class AriClient:
                                 answer_handler=self.controller.answer_channel,
                                 stop_handler=self.controller.stop_channel,
                                 dial_handler=self.controller.dial,
-                                record_handler=self.controller.record_channel
+                                record_handler=self.controller.record_channel,
+                                snoop_handler=self.controller.snoop_channel
                             )
                     elif event.type == EventType.STASIS_END:
                         stasis_end_event: StasisEndEvent = await self.__dispatch(message, StasisEndEvent, self.stasis_end_handler)
@@ -82,7 +83,8 @@ class AriClient:
                                 answer_handler=self.controller.answer_channel,
                                 stop_handler=self.controller.stop_channel,
                                 dial_handler=self.controller.dial,
-                                record_handler=self.controller.record_channel
+                                record_handler=self.controller.record_channel,
+                                snoop_handler=self.controller.snoop_channel
                             )
                     else:
                         logger.debug(f"Received unknown event: {event}")
