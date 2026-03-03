@@ -379,6 +379,7 @@ class AriClientController:
             raise Exception(f"Failed to record bridge: {response.status_code} {response.text}")
         return LiveRecording.create_with_handlers(
             stop_handler=self.stop_recording,
+            download_handler=self.download_recording,
             obj=response.json()
         )
 
@@ -432,6 +433,7 @@ class AriClientController:
             raise Exception(f"Failed to record channel: {response.status_code} {response.text}")
         return LiveRecording.create_with_handlers(
             stop_handler=self.stop_recording,
+            download_handler=self.download_recording,
             obj=response.json()
         )
 
@@ -493,3 +495,23 @@ class AriClientController:
         if response.status_code != 204:
             raise Exception(f"Failed to stop recording: {response.status_code} {response.text}")
         return None
+
+    async def download_recording(self, recording_name: str) -> bytes:
+        """
+        Download the file associated with a stored recording
+        (GET /recordings/stored/{recordingName}/file).
+
+        Args:
+            recording_name: The name of the recording (required)
+
+        Returns:
+            bytes: The raw audio file content (e.g. WAV)
+        """
+        response = await self.client.get(f"/recordings/stored/{recording_name}/file")
+        if response.status_code == 403:
+            raise Exception(f"Recording file could not be opened: {recording_name}")
+        if response.status_code == 404:
+            raise Exception(f"Recording not found: {recording_name}")
+        if response.status_code >= 300:
+            raise Exception(f"Failed to download recording: {response.status_code} {response.text}")
+        return response.content

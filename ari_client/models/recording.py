@@ -13,15 +13,18 @@ class LiveRecording(BaseModel):
     silence_duration: Optional[int] = Field(default=None, description="Duration of silence, in seconds, detected in the recording")
 
     __stop_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
+    __download_handler: Optional[Callable[[str], Awaitable[bytes]]] = PrivateAttr(default=None)
 
     @classmethod
     def create_with_handlers(
         cls,
         stop_handler: Callable[[str], Awaitable[None]],
+        download_handler: Callable[[str], Awaitable[bytes]],
         obj: dict
     ) -> "LiveRecording":
         recording = cls.model_validate(obj)
         recording.__stop_handler = stop_handler
+        recording.__download_handler = download_handler
         return recording
 
     async def stop(self):
@@ -29,3 +32,9 @@ class LiveRecording(BaseModel):
         if self.__stop_handler is None:
             raise ValueError("Stop handler not set")
         await self.__stop_handler(self.name)
+
+    async def download(self) -> bytes:
+        """Download the stored recording file as bytes."""
+        if self.__download_handler is None:
+            raise ValueError("Download handler not set")
+        return await self.__download_handler(self.name)
