@@ -28,7 +28,7 @@ uv sync
 
 ```python
 import asyncio
-from ari_client import AriClient, StasisStartEvent, StasisEndEvent
+from ari_client import AriClient, StasisStartEvent, StasisEndEvent, ChannelDtmfReceivedEvent
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +71,10 @@ async def on_stasis_start(event: StasisStartEvent):
 async def on_stasis_end(event: StasisEndEvent):
     logger.info(f"Channel left Stasis: {event.channel.id}")
 
+@client.on_channel_dtmf_received
+async def on_dtmf(event: ChannelDtmfReceivedEvent):
+    logger.info(f"DTMF received: digit={event.digit} on channel {event.channel.id}")
+
 # Main function
 async def main():
     await client.connect(app="myapp", subscribe_to_all=True)
@@ -99,7 +103,7 @@ if __name__ == "__main__":
 
 ### Event Objects
 
-Event objects (`StasisStartEvent`, `StasisEndEvent`) are received when channels enter or leave your Stasis application. They contain channel information and can be used to access the channel object for performing actions.
+Event objects (`StasisStartEvent`, `StasisEndEvent`, `ChannelDtmfReceivedEvent`) are received when channels enter/leave your Stasis application or when DTMF digits are received. They contain channel information and can be used to access the channel object for performing actions.
 
 **Note:** To create bridges, external media, or originate calls, use the controller via `client.ari` rather than event methods.
 
@@ -109,6 +113,12 @@ Channel objects represent Asterisk channels and provide methods for channel oper
 
 - `channel.answer()` - Answer the channel
 - `channel.stop()` - Hang up the channel
+- `channel.dial()` - Dial the channel
+- `channel.record(name, format, ...)` - Record audio from the channel
+- `channel.snoop(...)` - Spy/whisper on the channel
+- `channel.send_dtmf(dtmf, ...)` - Send DTMF tones to the channel
+- `channel.redirect(endpoint)` - Redirect the channel to a different endpoint
+- `channel.move(app, ...)` - Move the channel to another Stasis application
 
 ### Bridge Objects
 
@@ -140,6 +150,7 @@ AriClient(
 - `async connect(app: str, subscribe_to_all: bool = False)` - Connect to Asterisk and start listening for events
 - `on_stasis_start(handler)` - Register handler for StasisStart events (can be used as decorator)
 - `on_stasis_end(handler)` - Register handler for StasisEnd events (can be used as decorator)
+- `on_channel_dtmf_received(handler)` - Register handler for ChannelDtmfReceived events (can be used as decorator)
 - `ari` - Get the ari controller instance for performing actions outside event handlers
 - `async disconnect()` - Disconnect from Asterisk
 
@@ -152,6 +163,10 @@ Event handlers can be registered using decorators or method calls:
 @client.on_stasis_start
 async def handler(event: StasisStartEvent):
     pass
+
+@client.on_channel_dtmf_received
+async def on_dtmf(event: ChannelDtmfReceivedEvent):
+    print(f"Got digit: {event.digit}")
 
 # As method call
 async def handler(event: StasisStartEvent):
@@ -173,6 +188,9 @@ Controller class that handles all HTTP API operations. Typically accessed via `c
 - `async stop_bridge(bridge_id: str)` - Destroy a bridge
 - `async create_external_media(...) -> Channel` - Create external media channel
 - `async originate(...) -> Channel` - Originate a new channel
+- `async send_dtmf(channel_id, dtmf, before, between, duration, after)` - Send DTMF to a channel
+- `async redirect_channel(channel_id, endpoint)` - Redirect a channel to a different endpoint
+- `async move_channel(channel_id, app, app_args)` - Move a channel to another Stasis application
 
 ### Event
 
@@ -202,6 +220,20 @@ Event received when a channel leaves your Stasis application.
 - `channel: Channel` - The channel that left Stasis
 - `application: str` - Application name
 
+### ChannelDtmfReceivedEvent
+
+Event received when a DTMF digit is received on a channel.
+
+#### Properties
+
+- `type: EventType` - Event type (CHANNEL_DTMF_RECEIVED)
+- `timestamp: datetime` - Event timestamp
+- `digit: str` - DTMF digit received (0-9, A-D, *, #)
+- `duration_ms: int` - Duration of the DTMF digit in milliseconds
+- `channel: Channel` - The channel on which DTMF was received
+- `asterisk_id: str` - Asterisk instance ID
+- `application: str` - Application name
+
 ### Channel
 
 Represents an Asterisk channel.
@@ -219,7 +251,12 @@ Represents an Asterisk channel.
 
 - `async answer()` - Answer the channel
 - `async stop()` - Hang up the channel
-- `add_controller(controller: AriClientController)` - Add controller for performing actions
+- `async dial(caller, timeout)` - Dial the channel
+- `async record(name, format, ...)` - Record audio from the channel
+- `async snoop(spy, whisper, ...)` - Spy/whisper on the channel
+- `async send_dtmf(dtmf, before, between, duration, after)` - Send DTMF tones to the channel
+- `async redirect(endpoint)` - Redirect the channel to a different endpoint
+- `async move(app, app_args)` - Move the channel to another Stasis application
 
 ### Bridge
 
@@ -286,6 +323,41 @@ async def on_stasis_end(event: StasisEndEvent):
         await bridge.stop()
 ```
 
+## Example: IVR with DTMF
+
+```python
+from ari_client import AriClient, StasisStartEvent, ChannelDtmfReceivedEvent
+import logging
+
+logger = logging.getLogger(__name__)
+
+client = AriClient(
+    host="localhost", port=8088,
+    ari_user="asterisk", ari_password="asterisk"
+)
+
+@client.on_stasis_start
+async def on_stasis_start(event: StasisStartEvent):
+    await event.channel.answer()
+    logger.info(f"Channel {event.channel.id} answered, waiting for DTMF...")
+
+@client.on_channel_dtmf_received
+async def on_dtmf(event: ChannelDtmfReceivedEvent):
+    logger.info(f"Digit '{event.digit}' received on channel {event.channel.id}")
+
+    if event.digit == "1":
+        # Send DTMF back to the channel
+        await event.channel.send_dtmf(dtmf="1234", between=100, duration=200)
+    elif event.digit == "2":
+        # Redirect to another endpoint
+        await event.channel.redirect(endpoint="PJSIP/operator")
+    elif event.digit == "3":
+        # Move to a different Stasis application
+        await event.channel.move(app="queue-handler", app_args="sales")
+    elif event.digit == "#":
+        await event.channel.stop()
+```
+
 ## Error Handling
 
 The library includes automatic error handling:
@@ -305,7 +377,4 @@ async def on_stasis_start(event: StasisStartEvent):
         logger.error(f"Failed to answer channel: {e}")
 ```
 
-## License
-
-[Your License Here]
 

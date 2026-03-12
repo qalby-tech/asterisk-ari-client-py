@@ -10,6 +10,7 @@ from ari_client import (
     AriClient,
     StasisStartEvent,
     StasisEndEvent,
+    ChannelDtmfReceivedEvent,
     Channel,
     Bridge,
     EventType,
@@ -105,6 +106,20 @@ def sample_stasis_end_event(sample_channel_data):
         "type": "StasisEnd",
         "timestamp": "2024-01-01T12:00:00+00:00",
         "channel": sample_channel_data,
+        "application": "test-app"
+    }
+
+
+@pytest.fixture
+def sample_dtmf_received_event(sample_channel_data):
+    """Sample ChannelDtmfReceived event data"""
+    return {
+        "type": "ChannelDtmfReceived",
+        "timestamp": "2024-01-01T12:00:01+00:00",
+        "digit": "5",
+        "duration_ms": 100,
+        "channel": sample_channel_data,
+        "asterisk_id": "test-asterisk",
         "application": "test-app"
     }
 
@@ -246,6 +261,58 @@ class TestAriClient:
         assert received_event.channel.id == "test-channel-123"
 
     @pytest.mark.asyncio
+    async def test_on_channel_dtmf_received_decorator(self, ari_client):
+        """Test registering DTMF received handler as decorator"""
+        @ari_client.on_channel_dtmf_received
+        async def handler(event: ChannelDtmfReceivedEvent):
+            pass
+
+        assert ari_client.channel_dtmf_received_handler is not None
+        assert ari_client.channel_dtmf_received_handler == handler
+
+    @pytest.mark.asyncio
+    async def test_on_channel_dtmf_received_method(self, ari_client):
+        """Test registering DTMF received handler as method call"""
+        async def handler(event: ChannelDtmfReceivedEvent):
+            pass
+
+        ari_client.on_channel_dtmf_received(handler)
+
+        assert ari_client.channel_dtmf_received_handler == handler
+
+    @pytest.mark.asyncio
+    async def test_event_dispatch_dtmf_received(self, ari_client, sample_dtmf_received_event):
+        """Test dispatching ChannelDtmfReceived event"""
+        import asyncio
+        handler_called = asyncio.Event()
+        received_event = None
+
+        async def handler(event: ChannelDtmfReceivedEvent):
+            nonlocal received_event
+            received_event = event
+            handler_called.set()
+
+        ari_client.channel_dtmf_received_handler = handler
+        ari_client.controller = MagicMock()
+
+        import json
+        message = json.dumps(sample_dtmf_received_event)
+        event = await ari_client._AriClient__dispatch(
+            message,
+            ChannelDtmfReceivedEvent,
+            handler
+        )
+
+        await asyncio.wait_for(handler_called.wait(), timeout=1.0)
+
+        assert handler_called.is_set()
+        assert isinstance(received_event, ChannelDtmfReceivedEvent)
+        assert received_event.type == EventType.CHANNEL_DTMF_RECEIVED
+        assert received_event.digit == "5"
+        assert received_event.duration_ms == 100
+        assert received_event.channel.id == "test-channel-123"
+
+    @pytest.mark.asyncio
     async def test_disconnect(self, ari_client, mock_websocket):
         """Test disconnecting from Asterisk"""
         ari_client.ws = mock_websocket
@@ -366,6 +433,107 @@ class TestChannel:
         # Handlers should be set (we can't directly check private attrs, but we can test via methods)
         assert channel.id == "test-channel-123"
 
+    @pytest.mark.asyncio
+    async def test_channel_send_dtmf(self, sample_channel_data):
+        """Test sending DTMF to a channel"""
+        send_dtmf_handler = AsyncMock()
+
+        channel = Channel.create_with_handlers(
+            answer_handler=AsyncMock(),
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
+            record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
+            send_dtmf_handler=send_dtmf_handler,
+            redirect_handler=AsyncMock(),
+            move_handler=AsyncMock(),
+            obj=sample_channel_data
+        )
+
+        await channel.send_dtmf(dtmf="1234", between=200, duration=150)
+
+        send_dtmf_handler.assert_called_once_with(
+            channel_id="test-channel-123",
+            dtmf="1234",
+            before=None,
+            between=200,
+            duration=150,
+            after=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_channel_send_dtmf_no_handler(self, sample_channel_data):
+        """Test that send_dtmf raises error when handler not set"""
+        channel = Channel.model_validate(sample_channel_data)
+
+        with pytest.raises(ValueError, match="Send DTMF handler not set"):
+            await channel.send_dtmf(dtmf="1")
+
+    @pytest.mark.asyncio
+    async def test_channel_redirect(self, sample_channel_data):
+        """Test redirecting a channel"""
+        redirect_handler = AsyncMock()
+
+        channel = Channel.create_with_handlers(
+            answer_handler=AsyncMock(),
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
+            record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
+            send_dtmf_handler=AsyncMock(),
+            redirect_handler=redirect_handler,
+            move_handler=AsyncMock(),
+            obj=sample_channel_data
+        )
+
+        await channel.redirect(endpoint="PJSIP/2001")
+
+        redirect_handler.assert_called_once_with(
+            channel_id="test-channel-123",
+            endpoint="PJSIP/2001",
+        )
+
+    @pytest.mark.asyncio
+    async def test_channel_redirect_no_handler(self, sample_channel_data):
+        """Test that redirect raises error when handler not set"""
+        channel = Channel.model_validate(sample_channel_data)
+
+        with pytest.raises(ValueError, match="Redirect handler not set"):
+            await channel.redirect(endpoint="PJSIP/2001")
+
+    @pytest.mark.asyncio
+    async def test_channel_move(self, sample_channel_data):
+        """Test moving a channel to another Stasis app"""
+        move_handler = AsyncMock()
+
+        channel = Channel.create_with_handlers(
+            answer_handler=AsyncMock(),
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
+            record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
+            send_dtmf_handler=AsyncMock(),
+            redirect_handler=AsyncMock(),
+            move_handler=move_handler,
+            obj=sample_channel_data
+        )
+
+        await channel.move(app="other-app", app_args="arg1,arg2")
+
+        move_handler.assert_called_once_with(
+            channel_id="test-channel-123",
+            app="other-app",
+            app_args="arg1,arg2",
+        )
+
+    @pytest.mark.asyncio
+    async def test_channel_move_no_handler(self, sample_channel_data):
+        """Test that move raises error when handler not set"""
+        channel = Channel.model_validate(sample_channel_data)
+
+        with pytest.raises(ValueError, match="Move handler not set"):
+            await channel.move(app="other-app")
+
 
 class TestBridge:
     """Test cases for Bridge model"""
@@ -459,3 +627,15 @@ class TestEvents:
         assert isinstance(event.timestamp, datetime)
         assert isinstance(event.channel, Channel)
 
+    def test_channel_dtmf_received_event_creation(self, sample_dtmf_received_event):
+        """Test creating ChannelDtmfReceivedEvent from data"""
+        event = ChannelDtmfReceivedEvent.model_validate(sample_dtmf_received_event)
+
+        assert event.type == EventType.CHANNEL_DTMF_RECEIVED
+        assert event.digit == "5"
+        assert event.duration_ms == 100
+        assert event.channel.id == "test-channel-123"
+        assert event.application == "test-app"
+        assert event.asterisk_id == "test-asterisk"
+        assert isinstance(event.timestamp, datetime)
+        assert isinstance(event.channel, Channel)

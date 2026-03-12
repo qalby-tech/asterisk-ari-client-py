@@ -1,6 +1,6 @@
 import asyncio
 from ari_client import AriClient
-from ari_client import StasisStartEvent, StasisEndEvent
+from ari_client import StasisStartEvent, StasisEndEvent, ChannelDtmfReceivedEvent
 from ari_client import Bridge
 import logging
 
@@ -44,7 +44,23 @@ async def on_stasis_end(event: StasisEndEvent):
         await bridge.stop()
     else:
         logger.warning(f"Bridge not found for channel: {event.channel.id}")
-    pass
+
+@client.on_channel_dtmf_received
+async def on_dtmf(event: ChannelDtmfReceivedEvent):
+    logger.info(f"DTMF digit '{event.digit}' received on channel {event.channel.id} (duration: {event.duration_ms}ms)")
+
+    if event.digit == "1":
+        # Send DTMF tones back to the channel
+        await event.channel.send_dtmf(dtmf="5678", between=100, duration=200)
+    elif event.digit == "2":
+        # Redirect channel to another endpoint
+        await event.channel.redirect(endpoint="SIP/operator")
+    elif event.digit == "3":
+        # Move channel to a different Stasis application
+        await event.channel.move(app="other-app", app_args="arg1,arg2")
+    elif event.digit == "#":
+        # Hang up the channel
+        await event.channel.stop()
 
 async def main():
     
