@@ -41,6 +41,9 @@ class Channel(BaseModel):
     __dial_handler: Optional[Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]]] = PrivateAttr(default=None)
     __record_handler: Optional[Callable[..., Awaitable["LiveRecording"]]] = PrivateAttr(default=None)
     __snoop_handler: Optional[Callable[..., Awaitable["Channel"]]] = PrivateAttr(default=None)
+    __send_dtmf_handler: Optional[Callable[..., Awaitable[None]]] = PrivateAttr(default=None)
+    __redirect_handler: Optional[Callable[..., Awaitable[None]]] = PrivateAttr(default=None)
+    __move_handler: Optional[Callable[..., Awaitable[None]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
@@ -60,6 +63,9 @@ class Channel(BaseModel):
         dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
         record_handler: Callable[..., Awaitable["LiveRecording"]],
         snoop_handler: Callable[..., Awaitable["Channel"]],
+        send_dtmf_handler: Callable[..., Awaitable[None]],
+        redirect_handler: Callable[..., Awaitable[None]],
+        move_handler: Callable[..., Awaitable[None]],
         obj: dict
     ) -> "Channel":
         channel = cls.model_validate(obj)
@@ -68,6 +74,9 @@ class Channel(BaseModel):
         channel.__dial_handler = dial_handler
         channel.__record_handler = record_handler
         channel.__snoop_handler = snoop_handler
+        channel.__send_dtmf_handler = send_dtmf_handler
+        channel.__redirect_handler = redirect_handler
+        channel.__move_handler = move_handler
         return channel
     
     def add_handlers(
@@ -77,6 +86,9 @@ class Channel(BaseModel):
         dial_handler: Callable[[str, Optional[str], Optional[int]], Awaitable["Channel"]],
         record_handler: Callable[..., Awaitable["LiveRecording"]],
         snoop_handler: Callable[..., Awaitable["Channel"]],
+        send_dtmf_handler: Callable[..., Awaitable[None]],
+        redirect_handler: Callable[..., Awaitable[None]],
+        move_handler: Callable[..., Awaitable[None]],
     ):
         """Add handlers to the channel for performing actions"""
         self.__answer_handler = answer_handler
@@ -84,7 +96,10 @@ class Channel(BaseModel):
         self.__dial_handler = dial_handler
         self.__record_handler = record_handler
         self.__snoop_handler = snoop_handler
-    
+        self.__send_dtmf_handler = send_dtmf_handler
+        self.__redirect_handler = redirect_handler
+        self.__move_handler = move_handler
+
     async def answer(self):
         if self.__answer_handler is None:
             raise ValueError("Answer handler not set")
@@ -186,4 +201,63 @@ class Channel(BaseModel):
             whisper=whisper,
             app_args=app_args,
             snoop_id=snoop_id,
+        )
+
+    async def send_dtmf(
+        self,
+        dtmf: Optional[str] = None,
+        before: Optional[int] = None,
+        between: Optional[int] = None,
+        duration: Optional[int] = None,
+        after: Optional[int] = None,
+    ) -> None:
+        """
+        Send DTMF to this channel.
+
+        Args:
+            dtmf: DTMF to send
+            before: Amount of time to wait before DTMF digits (ms) start
+            between: Amount of time in between DTMF digits (ms). Default: 100
+            duration: Length of each DTMF digit (ms). Default: 100
+            after: Amount of time to wait after DTMF digits (ms) end
+        """
+        if self.__send_dtmf_handler is None:
+            raise ValueError("Send DTMF handler not set")
+        await self.__send_dtmf_handler(
+            channel_id=self.id,
+            dtmf=dtmf,
+            before=before,
+            between=between,
+            duration=duration,
+            after=after,
+        )
+
+    async def redirect(self, endpoint: str) -> None:
+        """
+        Redirect this channel to a different location.
+
+        Args:
+            endpoint: The endpoint to redirect the channel to (required)
+        """
+        if self.__redirect_handler is None:
+            raise ValueError("Redirect handler not set")
+        await self.__redirect_handler(
+            channel_id=self.id,
+            endpoint=endpoint,
+        )
+
+    async def move(self, app: str, app_args: Optional[str] = None) -> None:
+        """
+        Move this channel from one Stasis application to another.
+
+        Args:
+            app: The Stasis application to move the channel to (required)
+            app_args: Application arguments to pass to the target Stasis application
+        """
+        if self.__move_handler is None:
+            raise ValueError("Move handler not set")
+        await self.__move_handler(
+            channel_id=self.id,
+            app=app,
+            app_args=app_args,
         )

@@ -45,6 +45,9 @@ class AriClientController:
             dial_handler=self.dial,
             record_handler=self.record_channel,
             snoop_handler=self.snoop_channel,
+            send_dtmf_handler=self.send_dtmf,
+            redirect_handler=self.redirect_channel,
+            move_handler=self.move_channel,
             obj=response.json()
         )
     
@@ -128,6 +131,9 @@ class AriClientController:
             dial_handler=self.dial,
             record_handler=self.record_channel,
             snoop_handler=self.snoop_channel,
+            send_dtmf_handler=self.send_dtmf,
+            redirect_handler=self.redirect_channel,
+            move_handler=self.move_channel,
             obj=response.json()
         )
     
@@ -210,6 +216,9 @@ class AriClientController:
             dial_handler=self.dial,
             record_handler=self.record_channel,
             snoop_handler=self.snoop_channel,
+            send_dtmf_handler=self.send_dtmf,
+            redirect_handler=self.redirect_channel,
+            move_handler=self.move_channel,
             obj=response.json()
         )
     
@@ -290,6 +299,9 @@ class AriClientController:
             dial_handler=self.dial,
             record_handler=self.record_channel,
             snoop_handler=self.snoop_channel,
+            send_dtmf_handler=self.send_dtmf,
+            redirect_handler=self.redirect_channel,
+            move_handler=self.move_channel,
             obj=response.json()
         )
     
@@ -481,8 +493,95 @@ class AriClientController:
             dial_handler=self.dial,
             record_handler=self.record_channel,
             snoop_handler=self.snoop_channel,
+            send_dtmf_handler=self.send_dtmf,
+            redirect_handler=self.redirect_channel,
+            move_handler=self.move_channel,
             obj=response.json()
         )
+
+    async def send_dtmf(
+        self,
+        channel_id: str,
+        dtmf: Optional[str] = None,
+        before: Optional[int] = None,
+        between: Optional[int] = None,
+        duration: Optional[int] = None,
+        after: Optional[int] = None,
+    ) -> None:
+        """
+        Send provided DTMF to a given channel (POST /channels/{channelId}/dtmf).
+
+        Args:
+            channel_id: Channel's id (required)
+            dtmf: DTMF to send
+            before: Amount of time to wait before DTMF digits (specified in milliseconds) start
+            between: Amount of time in between DTMF digits (specified in milliseconds). Default: 100
+            duration: Length of each DTMF digit (specified in milliseconds). Default: 100
+            after: Amount of time to wait after DTMF digits (specified in milliseconds) end
+        """
+        params: dict = {}
+        if dtmf is not None:
+            params["dtmf"] = dtmf
+        if before is not None:
+            params["before"] = before
+        if between is not None:
+            params["between"] = between
+        if duration is not None:
+            params["duration"] = duration
+        if after is not None:
+            params["after"] = after
+
+        response = await self.client.post(f"/channels/{channel_id}/dtmf", params=params)
+        if response.status_code >= 300:
+            raise Exception(f"Failed to send DTMF to channel: {response.status_code} {response.text}")
+        return None
+
+    async def redirect_channel(
+        self,
+        channel_id: str,
+        endpoint: str,
+    ) -> None:
+        """
+        Redirect the channel to a different location (POST /channels/{channelId}/redirect).
+
+        Args:
+            channel_id: Channel's id (required)
+            endpoint: The endpoint to redirect the channel to (required)
+        """
+        params: dict = {
+            "endpoint": endpoint,
+        }
+
+        response = await self.client.post(f"/channels/{channel_id}/redirect", params=params)
+        if response.status_code >= 300:
+            raise Exception(f"Failed to redirect channel: {response.status_code} {response.text}")
+        return None
+
+    async def move_channel(
+        self,
+        channel_id: str,
+        app: str,
+        app_args: Optional[str] = None,
+    ) -> None:
+        """
+        Move the channel from one Stasis application to another
+        (POST /channels/{channelId}/move).
+
+        Args:
+            channel_id: Channel's id (required)
+            app: The channel will be passed to this Stasis application (required)
+            app_args: The application arguments to pass to the Stasis application provided by 'app'
+        """
+        params: dict = {
+            "app": app,
+        }
+        if app_args is not None:
+            params["appArgs"] = app_args
+
+        response = await self.client.post(f"/channels/{channel_id}/move", params=params)
+        if response.status_code >= 300:
+            raise Exception(f"Failed to move channel: {response.status_code} {response.text}")
+        return None
 
     async def stop_recording(self, recording_name: str):
         """

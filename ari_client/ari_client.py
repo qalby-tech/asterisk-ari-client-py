@@ -1,7 +1,8 @@
 import asyncio
 import websockets
 from .models.events import Event, EventType
-from .models.events import StasisStartEvent, StasisEndEvent
+from .models.events import StasisStartEvent, StasisEndEvent, ChannelDtmfReceivedEvent
+from .models.channels import Channel
 from .controller import AriClientController
 import logging
 from typing import Callable, Awaitable, Optional, Type
@@ -29,6 +30,7 @@ class AriClient:
         # event handlers
         self.stasis_start_handler = None
         self.stasis_end_handler = None
+        self.channel_dtmf_received_handler = None
     
     
     @property
@@ -60,6 +62,20 @@ class AriClient:
             task.add_done_callback(self._handle_task_exception)
         return event
     
+    def _add_channel_handlers(self, channel: Channel) -> None:
+        """Add controller handlers to a channel."""
+        if self.controller:
+            channel.add_handlers(
+                answer_handler=self.controller.answer_channel,
+                stop_handler=self.controller.stop_channel,
+                dial_handler=self.controller.dial,
+                record_handler=self.controller.record_channel,
+                snoop_handler=self.controller.snoop_channel,
+                send_dtmf_handler=self.controller.send_dtmf,
+                redirect_handler=self.controller.redirect_channel,
+                move_handler=self.controller.move_channel,
+            )
+
     async def __listen_events(self):
         try:
             while True:
@@ -68,24 +84,13 @@ class AriClient:
                     event = Event.model_validate_json(message)
                     if event.type == EventType.STASIS_START:
                         stasis_start_event: StasisStartEvent = await self.__dispatch(message, StasisStartEvent, self.stasis_start_handler)
-                        if self.controller:
-                            stasis_start_event.channel.add_handlers(
-                                answer_handler=self.controller.answer_channel,
-                                stop_handler=self.controller.stop_channel,
-                                dial_handler=self.controller.dial,
-                                record_handler=self.controller.record_channel,
-                                snoop_handler=self.controller.snoop_channel
-                            )
+                        self._add_channel_handlers(stasis_start_event.channel)
                     elif event.type == EventType.STASIS_END:
                         stasis_end_event: StasisEndEvent = await self.__dispatch(message, StasisEndEvent, self.stasis_end_handler)
-                        if self.controller:
-                            stasis_end_event.channel.add_handlers(
-                                answer_handler=self.controller.answer_channel,
-                                stop_handler=self.controller.stop_channel,
-                                dial_handler=self.controller.dial,
-                                record_handler=self.controller.record_channel,
-                                snoop_handler=self.controller.snoop_channel
-                            )
+                        self._add_channel_handlers(stasis_end_event.channel)
+                    elif event.type == EventType.CHANNEL_DTMF_RECEIVED:
+                        dtmf_event: ChannelDtmfReceivedEvent = await self.__dispatch(message, ChannelDtmfReceivedEvent, self.channel_dtmf_received_handler)
+                        self._add_channel_handlers(dtmf_event.channel)
                     else:
                         logger.debug(f"Received unknown event: {event}")
                 except Exception as e:
@@ -149,6 +154,25 @@ class AriClient:
         else:
             # Called as client.on_stasis_end(handler)
             self.stasis_end_handler = handler
+            return handler
+
+    def on_channel_dtmf_received(self, handler: Optional[Callable[[ChannelDtmfReceivedEvent], Awaitable[None]]] = None):
+        """
+        Register an async handler for ChannelDtmfReceived events.
+        Can be used as a decorator: @client.on_channel_dtmf_received
+        Or as a method call: client.on_channel_dtmf_received(handler)
+        
+        The handler will be called when a DTMF digit is received on any channel.
+        The handler will be passed the ChannelDtmfReceivedEvent object.
+        """
+        def decorator(func: Callable[[ChannelDtmfReceivedEvent], Awaitable[None]]):
+            self.channel_dtmf_received_handler = func
+            return func
+        
+        if handler is None:
+            return decorator
+        else:
+            self.channel_dtmf_received_handler = handler
             return handler
     
     async def disconnect(self):
