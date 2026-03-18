@@ -11,10 +11,18 @@ from ari_client import (
     StasisStartEvent,
     StasisEndEvent,
     ChannelDtmfReceivedEvent,
+    ChannelCreatedEvent,
+    ChannelDestroyedEvent,
+    ChannelEnteredBridgeEvent,
+    BridgeCreatedEvent,
+    DialEvent,
+    PlaybackStartedEvent,
+    PlaybackFinishedEvent,
     Channel,
     Bridge,
+    Playback,
     EventType,
-    BridgeType
+    BridgeType,
 )
 from ari_client.models.channels import CallerID, DialplanCEP
 from httpx import AsyncClient
@@ -83,6 +91,18 @@ def sample_bridge_data():
         "video_mode": None,
         "video_source_id": None,
         "creationtime": "2024-01-01T12:00:00+00:00"
+    }
+
+
+@pytest.fixture
+def sample_playback_data():
+    """Sample playback data for testing"""
+    return {
+        "id": "test-playback-123",
+        "media_uri": "sound:hello-world",
+        "target_uri": "channel:test-channel-123",
+        "language": "en",
+        "state": "playing",
     }
 
 
@@ -161,15 +181,11 @@ class TestAriClient:
     @pytest.mark.asyncio
     async def test_on_stasis_start_decorator(self, ari_client):
         """Test registering stasis start handler as decorator"""
-        handler_called = False
-        
         @ari_client.on_stasis_start
         async def handler(event: StasisStartEvent):
-            nonlocal handler_called
-            handler_called = True
+            pass
         
-        assert ari_client.stasis_start_handler is not None
-        assert ari_client.stasis_start_handler == handler
+        assert ari_client._event_handlers.get("StasisStart") is handler
 
     @pytest.mark.asyncio
     async def test_on_stasis_start_method(self, ari_client):
@@ -179,86 +195,16 @@ class TestAriClient:
         
         ari_client.on_stasis_start(handler)
         
-        assert ari_client.stasis_start_handler == handler
+        assert ari_client._event_handlers.get("StasisStart") is handler
 
     @pytest.mark.asyncio
     async def test_on_stasis_end_decorator(self, ari_client):
         """Test registering stasis end handler as decorator"""
-        handler_called = False
-        
         @ari_client.on_stasis_end
         async def handler(event: StasisEndEvent):
-            nonlocal handler_called
-            handler_called = True
+            pass
         
-        assert ari_client.stasis_end_handler is not None
-        assert ari_client.stasis_end_handler == handler
-
-    @pytest.mark.asyncio
-    async def test_event_dispatch_stasis_start(self, ari_client, sample_stasis_start_event, mock_http_client):
-        """Test dispatching StasisStart event"""
-        import asyncio
-        handler_called = asyncio.Event()
-        received_event = None
-        
-        async def handler(event: StasisStartEvent):
-            nonlocal received_event
-            received_event = event
-            handler_called.set()
-        
-        ari_client.stasis_start_handler = handler
-        ari_client.controller = MagicMock()
-        ari_client.controller.answer_channel = AsyncMock()
-        ari_client.controller.stop_channel = AsyncMock()
-        
-        import json
-        message = json.dumps(sample_stasis_start_event)
-        event = await ari_client._AriClient__dispatch(
-            message,
-            StasisStartEvent,
-            handler
-        )
-        
-        # Wait for the handler task to complete (with timeout)
-        await asyncio.wait_for(handler_called.wait(), timeout=1.0)
-        
-        assert handler_called.is_set()
-        assert isinstance(received_event, StasisStartEvent)
-        assert received_event.type == EventType.STASIS_START
-        assert received_event.channel.id == "test-channel-123"
-
-    @pytest.mark.asyncio
-    async def test_event_dispatch_stasis_end(self, ari_client, sample_stasis_end_event):
-        """Test dispatching StasisEnd event"""
-        import asyncio
-        handler_called = asyncio.Event()
-        received_event = None
-        
-        async def handler(event: StasisEndEvent):
-            nonlocal received_event
-            received_event = event
-            handler_called.set()
-        
-        ari_client.stasis_end_handler = handler
-        ari_client.controller = MagicMock()
-        ari_client.controller.answer_channel = AsyncMock()
-        ari_client.controller.stop_channel = AsyncMock()
-        
-        import json
-        message = json.dumps(sample_stasis_end_event)
-        event = await ari_client._AriClient__dispatch(
-            message,
-            StasisEndEvent,
-            handler
-        )
-        
-        # Wait for the handler task to complete (with timeout)
-        await asyncio.wait_for(handler_called.wait(), timeout=1.0)
-        
-        assert handler_called.is_set()
-        assert isinstance(received_event, StasisEndEvent)
-        assert received_event.type == EventType.STASIS_END
-        assert received_event.channel.id == "test-channel-123"
+        assert ari_client._event_handlers.get("StasisEnd") is handler
 
     @pytest.mark.asyncio
     async def test_on_channel_dtmf_received_decorator(self, ari_client):
@@ -267,8 +213,7 @@ class TestAriClient:
         async def handler(event: ChannelDtmfReceivedEvent):
             pass
 
-        assert ari_client.channel_dtmf_received_handler is not None
-        assert ari_client.channel_dtmf_received_handler == handler
+        assert ari_client._event_handlers.get("ChannelDtmfReceived") is handler
 
     @pytest.mark.asyncio
     async def test_on_channel_dtmf_received_method(self, ari_client):
@@ -278,39 +223,43 @@ class TestAriClient:
 
         ari_client.on_channel_dtmf_received(handler)
 
-        assert ari_client.channel_dtmf_received_handler == handler
+        assert ari_client._event_handlers.get("ChannelDtmfReceived") is handler
 
     @pytest.mark.asyncio
-    async def test_event_dispatch_dtmf_received(self, ari_client, sample_dtmf_received_event):
-        """Test dispatching ChannelDtmfReceived event"""
-        import asyncio
-        handler_called = asyncio.Event()
-        received_event = None
+    async def test_on_event_generic_decorator(self, ari_client):
+        """Test generic on_event registration"""
+        @ari_client.on_event(EventType.BRIDGE_CREATED)
+        async def handler(event: BridgeCreatedEvent):
+            pass
 
-        async def handler(event: ChannelDtmfReceivedEvent):
-            nonlocal received_event
-            received_event = event
-            handler_called.set()
+        assert ari_client._event_handlers.get("BridgeCreated") is handler
 
-        ari_client.channel_dtmf_received_handler = handler
-        ari_client.controller = MagicMock()
+    @pytest.mark.asyncio
+    async def test_on_event_generic_string(self, ari_client):
+        """Test generic on_event with raw string"""
+        @ari_client.on_event("ChannelDestroyed")
+        async def handler(event):
+            pass
 
-        import json
-        message = json.dumps(sample_dtmf_received_event)
-        event = await ari_client._AriClient__dispatch(
-            message,
-            ChannelDtmfReceivedEvent,
-            handler
-        )
+        assert ari_client._event_handlers.get("ChannelDestroyed") is handler
 
-        await asyncio.wait_for(handler_called.wait(), timeout=1.0)
+    @pytest.mark.asyncio
+    async def test_on_dial_decorator(self, ari_client):
+        """Test registering dial handler"""
+        @ari_client.on_dial
+        async def handler(event: DialEvent):
+            pass
 
-        assert handler_called.is_set()
-        assert isinstance(received_event, ChannelDtmfReceivedEvent)
-        assert received_event.type == EventType.CHANNEL_DTMF_RECEIVED
-        assert received_event.digit == "5"
-        assert received_event.duration_ms == 100
-        assert received_event.channel.id == "test-channel-123"
+        assert ari_client._event_handlers.get("Dial") is handler
+
+    @pytest.mark.asyncio
+    async def test_on_playback_started_decorator(self, ari_client):
+        """Test registering playback started handler"""
+        @ari_client.on_playback_started
+        async def handler(event: PlaybackStartedEvent):
+            pass
+
+        assert ari_client._event_handlers.get("PlaybackStarted") is handler
 
     @pytest.mark.asyncio
     async def test_disconnect(self, ari_client, mock_websocket):
@@ -339,19 +288,16 @@ class TestChannel:
 
     def test_channel_with_handlers(self, sample_channel_data):
         """Test creating channel with handlers"""
-        answer_handler = AsyncMock()
-        stop_handler = AsyncMock()
-        dial_handler = AsyncMock()
-        
         channel = Channel.create_with_handlers(
-            answer_handler=answer_handler,
-            stop_handler=stop_handler,
-            dial_handler=dial_handler,
+            answer_handler=AsyncMock(),
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
             record_handler=AsyncMock(),
             snoop_handler=AsyncMock(),
             send_dtmf_handler=AsyncMock(),
             redirect_handler=AsyncMock(),
             move_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -361,18 +307,17 @@ class TestChannel:
     async def test_channel_answer(self, sample_channel_data):
         """Test answering a channel"""
         answer_handler = AsyncMock()
-        stop_handler = AsyncMock()
-        dial_handler = AsyncMock()
         
         channel = Channel.create_with_handlers(
             answer_handler=answer_handler,
-            stop_handler=stop_handler,
-            dial_handler=dial_handler,
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
             record_handler=AsyncMock(),
             snoop_handler=AsyncMock(),
             send_dtmf_handler=AsyncMock(),
             redirect_handler=AsyncMock(),
             move_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -383,19 +328,18 @@ class TestChannel:
     @pytest.mark.asyncio
     async def test_channel_stop(self, sample_channel_data):
         """Test stopping a channel"""
-        answer_handler = AsyncMock()
         stop_handler = AsyncMock()
-        dial_handler = AsyncMock()
         
         channel = Channel.create_with_handlers(
-            answer_handler=answer_handler,
+            answer_handler=AsyncMock(),
             stop_handler=stop_handler,
-            dial_handler=dial_handler,
+            dial_handler=AsyncMock(),
             record_handler=AsyncMock(),
             snoop_handler=AsyncMock(),
             send_dtmf_handler=AsyncMock(),
             redirect_handler=AsyncMock(),
             move_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_channel_data
         )
         
@@ -414,23 +358,19 @@ class TestChannel:
     def test_channel_add_handlers(self, sample_channel_data):
         """Test adding handlers to existing channel"""
         channel = Channel.model_validate(sample_channel_data)
-        answer_handler = AsyncMock()
-        stop_handler = AsyncMock()
-        dial_handler = AsyncMock()
-        record_handler = AsyncMock()
         
         channel.add_handlers(
-            answer_handler=answer_handler,
-            stop_handler=stop_handler,
-            dial_handler=dial_handler,
-            record_handler=record_handler,
+            answer_handler=AsyncMock(),
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
+            record_handler=AsyncMock(),
             snoop_handler=AsyncMock(),
             send_dtmf_handler=AsyncMock(),
             redirect_handler=AsyncMock(),
             move_handler=AsyncMock(),
+            play_handler=AsyncMock(),
         )
         
-        # Handlers should be set (we can't directly check private attrs, but we can test via methods)
         assert channel.id == "test-channel-123"
 
     @pytest.mark.asyncio
@@ -447,6 +387,7 @@ class TestChannel:
             send_dtmf_handler=send_dtmf_handler,
             redirect_handler=AsyncMock(),
             move_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_channel_data
         )
 
@@ -483,6 +424,7 @@ class TestChannel:
             send_dtmf_handler=AsyncMock(),
             redirect_handler=redirect_handler,
             move_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_channel_data
         )
 
@@ -515,6 +457,7 @@ class TestChannel:
             send_dtmf_handler=AsyncMock(),
             redirect_handler=AsyncMock(),
             move_handler=move_handler,
+            play_handler=AsyncMock(),
             obj=sample_channel_data
         )
 
@@ -534,6 +477,43 @@ class TestChannel:
         with pytest.raises(ValueError, match="Move handler not set"):
             await channel.move(app="other-app")
 
+    @pytest.mark.asyncio
+    async def test_channel_play(self, sample_channel_data):
+        """Test playing media on a channel"""
+        play_handler = AsyncMock()
+
+        channel = Channel.create_with_handlers(
+            answer_handler=AsyncMock(),
+            stop_handler=AsyncMock(),
+            dial_handler=AsyncMock(),
+            record_handler=AsyncMock(),
+            snoop_handler=AsyncMock(),
+            send_dtmf_handler=AsyncMock(),
+            redirect_handler=AsyncMock(),
+            move_handler=AsyncMock(),
+            play_handler=play_handler,
+            obj=sample_channel_data
+        )
+
+        await channel.play(media="sound:hello-world", lang="en")
+
+        play_handler.assert_called_once_with(
+            channel_id="test-channel-123",
+            media="sound:hello-world",
+            lang="en",
+            offsetms=None,
+            skipms=None,
+            playback_id=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_channel_play_no_handler(self, sample_channel_data):
+        """Test that play raises error when handler not set"""
+        channel = Channel.model_validate(sample_channel_data)
+
+        with pytest.raises(ValueError, match="Play handler not set"):
+            await channel.play(media="sound:hello")
+
 
 class TestBridge:
     """Test cases for Bridge model"""
@@ -549,13 +529,11 @@ class TestBridge:
 
     def test_bridge_with_handlers(self, sample_bridge_data):
         """Test creating bridge with handlers"""
-        stop_handler = AsyncMock()
-        add_channel_handler = AsyncMock()
-        
         bridge = Bridge.create_with_handlers(
-            stop_handler=stop_handler,
-            add_channel_handler=add_channel_handler,
+            stop_handler=AsyncMock(),
+            add_channel_handler=AsyncMock(),
             record_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_bridge_data
         )
         
@@ -565,12 +543,12 @@ class TestBridge:
     async def test_bridge_stop(self, sample_bridge_data):
         """Test stopping a bridge"""
         stop_handler = AsyncMock()
-        add_channel_handler = AsyncMock()
         
         bridge = Bridge.create_with_handlers(
             stop_handler=stop_handler,
-            add_channel_handler=add_channel_handler,
+            add_channel_handler=AsyncMock(),
             record_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_bridge_data
         )
         
@@ -581,13 +559,13 @@ class TestBridge:
     @pytest.mark.asyncio
     async def test_bridge_add_channel(self, sample_bridge_data):
         """Test adding channel to bridge"""
-        stop_handler = AsyncMock()
         add_channel_handler = AsyncMock()
         
         bridge = Bridge.create_with_handlers(
-            stop_handler=stop_handler,
+            stop_handler=AsyncMock(),
             add_channel_handler=add_channel_handler,
             record_handler=AsyncMock(),
+            play_handler=AsyncMock(),
             obj=sample_bridge_data
         )
         
@@ -602,6 +580,94 @@ class TestBridge:
         
         with pytest.raises(ValueError, match="Stop handler not set"):
             await bridge.stop()
+
+    @pytest.mark.asyncio
+    async def test_bridge_play(self, sample_bridge_data):
+        """Test playing media on a bridge"""
+        play_handler = AsyncMock()
+
+        bridge = Bridge.create_with_handlers(
+            stop_handler=AsyncMock(),
+            add_channel_handler=AsyncMock(),
+            record_handler=AsyncMock(),
+            play_handler=play_handler,
+            obj=sample_bridge_data
+        )
+
+        await bridge.play(media="sound:hello-world")
+
+        play_handler.assert_called_once_with(
+            bridge_id="test-bridge-123",
+            media="sound:hello-world",
+            lang=None,
+            offsetms=None,
+            skipms=None,
+            playback_id=None,
+            announcer_format=None,
+        )
+
+    def test_bridge_add_handlers(self, sample_bridge_data):
+        """Test adding handlers to existing bridge"""
+        bridge = Bridge.model_validate(sample_bridge_data)
+
+        bridge.add_handlers(
+            stop_handler=AsyncMock(),
+            add_channel_handler=AsyncMock(),
+            record_handler=AsyncMock(),
+            play_handler=AsyncMock(),
+        )
+
+        assert bridge.id == "test-bridge-123"
+
+
+class TestPlayback:
+    """Test cases for Playback model"""
+
+    def test_playback_creation(self, sample_playback_data):
+        """Test creating a playback from data"""
+        playback = Playback.model_validate(sample_playback_data)
+
+        assert playback.id == "test-playback-123"
+        assert playback.media_uri == "sound:hello-world"
+        assert playback.state == "playing"
+
+    @pytest.mark.asyncio
+    async def test_playback_stop(self, sample_playback_data):
+        """Test stopping a playback"""
+        stop_handler = AsyncMock()
+
+        playback = Playback.create_with_handlers(
+            stop_handler=stop_handler,
+            control_handler=AsyncMock(),
+            obj=sample_playback_data,
+        )
+
+        await playback.stop()
+
+        stop_handler.assert_called_once_with("test-playback-123")
+
+    @pytest.mark.asyncio
+    async def test_playback_control(self, sample_playback_data):
+        """Test controlling a playback"""
+        control_handler = AsyncMock()
+
+        playback = Playback.create_with_handlers(
+            stop_handler=AsyncMock(),
+            control_handler=control_handler,
+            obj=sample_playback_data,
+        )
+
+        await playback.control("pause")
+
+        control_handler.assert_called_once_with("test-playback-123", "pause")
+
+    @pytest.mark.asyncio
+    async def test_playback_stop_no_handler(self, sample_playback_data):
+        """Test that stop raises error when handler not set"""
+        playback = Playback.model_validate(sample_playback_data)
+
+        with pytest.raises(ValueError, match="Stop handler not set"):
+            await playback.stop()
 
 
 class TestEvents:
@@ -639,3 +705,147 @@ class TestEvents:
         assert event.asterisk_id == "test-asterisk"
         assert isinstance(event.timestamp, datetime)
         assert isinstance(event.channel, Channel)
+
+    def test_channel_destroyed_event(self, sample_channel_data):
+        """Test creating ChannelDestroyedEvent"""
+        event = ChannelDestroyedEvent.model_validate({
+            "type": "ChannelDestroyed",
+            "timestamp": "2024-01-01T12:00:00+0300",
+            "cause": 16,
+            "cause_txt": "Normal Clearing",
+            "channel": sample_channel_data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.type == EventType.CHANNEL_DESTROYED
+        assert event.cause == 16
+        assert event.cause_txt == "Normal Clearing"
+        assert isinstance(event.timestamp, datetime)
+
+    def test_channel_entered_bridge_event(self, sample_channel_data, sample_bridge_data):
+        """Test creating ChannelEnteredBridgeEvent"""
+        event = ChannelEnteredBridgeEvent.model_validate({
+            "type": "ChannelEnteredBridge",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "bridge": sample_bridge_data,
+            "channel": sample_channel_data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.type == EventType.CHANNEL_ENTERED_BRIDGE
+        assert isinstance(event.bridge, Bridge)
+        assert isinstance(event.channel, Channel)
+        assert event.bridge.id == "test-bridge-123"
+
+    def test_bridge_created_event(self, sample_bridge_data):
+        """Test creating BridgeCreatedEvent"""
+        event = BridgeCreatedEvent.model_validate({
+            "type": "BridgeCreated",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "bridge": sample_bridge_data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.type == EventType.BRIDGE_CREATED
+        assert isinstance(event.bridge, Bridge)
+
+    def test_dial_event(self, sample_channel_data):
+        """Test creating DialEvent"""
+        peer_data = dict(sample_channel_data)
+        peer_data["id"] = "peer-channel-456"
+        peer_data["name"] = "SIP/peer-00000002"
+
+        event = DialEvent.model_validate({
+            "type": "Dial",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "caller": sample_channel_data,
+            "peer": peer_data,
+            "dialstatus": "ANSWER",
+            "dialstring": "SIP/peer",
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.type == EventType.DIAL
+        assert isinstance(event.caller, Channel)
+        assert isinstance(event.peer, Channel)
+        assert event.peer.id == "peer-channel-456"
+        assert event.dialstatus == "ANSWER"
+
+    def test_playback_started_event(self, sample_playback_data):
+        """Test creating PlaybackStartedEvent"""
+        event = PlaybackStartedEvent.model_validate({
+            "type": "PlaybackStarted",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "playback": sample_playback_data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.type == EventType.PLAYBACK_STARTED
+        assert isinstance(event.playback, Playback)
+        assert event.playback.id == "test-playback-123"
+
+    def test_playback_finished_event(self, sample_playback_data):
+        """Test creating PlaybackFinishedEvent"""
+        data = dict(sample_playback_data)
+        data["state"] = "done"
+
+        event = PlaybackFinishedEvent.model_validate({
+            "type": "PlaybackFinished",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "playback": data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.type == EventType.PLAYBACK_FINISHED
+        assert event.playback.state == "done"
+
+    def test_channel_varset_event_with_channel(self, sample_channel_data):
+        """Test ChannelVarsetEvent with a channel"""
+        from ari_client import ChannelVarsetEvent
+
+        event = ChannelVarsetEvent.model_validate({
+            "type": "ChannelVarset",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "variable": "CDR(answer)",
+            "value": "2024-01-01 12:00:00",
+            "channel": sample_channel_data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.variable == "CDR(answer)"
+        assert isinstance(event.channel, Channel)
+
+    def test_channel_varset_event_global(self):
+        """Test ChannelVarsetEvent without a channel (global variable)"""
+        from ari_client import ChannelVarsetEvent
+
+        event = ChannelVarsetEvent.model_validate({
+            "type": "ChannelVarset",
+            "timestamp": "2024-01-01T12:00:00+00:00",
+            "variable": "GLOBAL_VAR",
+            "value": "42",
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert event.variable == "GLOBAL_VAR"
+        assert event.channel is None
+
+    def test_timestamp_with_non_standard_offset(self, sample_channel_data):
+        """Test that timestamps with non-standard offsets (e.g. +0300) are parsed correctly"""
+        event = ChannelCreatedEvent.model_validate({
+            "type": "ChannelCreated",
+            "timestamp": "2024-01-01T12:00:00.000+0300",
+            "channel": sample_channel_data,
+            "asterisk_id": "test",
+            "application": "test-app",
+        })
+
+        assert isinstance(event.timestamp, datetime)

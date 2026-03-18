@@ -27,6 +27,14 @@ class LiveRecording(BaseModel):
         recording.__download_handler = download_handler
         return recording
 
+    def add_handlers(
+        self,
+        stop_handler: Callable[[str], Awaitable[None]],
+        download_handler: Callable[[str], Awaitable[bytes]],
+    ):
+        self.__stop_handler = stop_handler
+        self.__download_handler = download_handler
+
     async def stop(self):
         """Stop this live recording and store it."""
         if self.__stop_handler is None:

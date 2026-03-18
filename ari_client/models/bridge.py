@@ -7,6 +7,7 @@ import re
 
 if TYPE_CHECKING:
     from .recording import LiveRecording
+    from .playback import Playback
 
 
 class BridgeType(str, Enum):
@@ -36,13 +37,12 @@ class Bridge(BaseModel):
     __stop_handler: Optional[Callable[[str], Awaitable[None]]] = PrivateAttr(default=None)
     __add_channel_handler: Optional[Callable[[str, str], Awaitable[None]]] = PrivateAttr(default=None)
     __record_handler: Optional[Callable[..., Awaitable["LiveRecording"]]] = PrivateAttr(default=None)
+    __play_handler: Optional[Callable[..., Awaitable["Playback"]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
     def validate_creationtime(cls, v: str | datetime) -> datetime:
         if isinstance(v, str):
-            # Handle timezone offset without colon (e.g., +0300 -> +03:00)
-            # Match timezone offset pattern like +0300 or -0500
             v = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', v)
             return datetime.fromisoformat(v)
         return v
@@ -53,13 +53,27 @@ class Bridge(BaseModel):
         stop_handler: Callable[[str], Awaitable[None]],
         add_channel_handler: Callable[[str, str], Awaitable[None]],
         record_handler: Callable[..., Awaitable["LiveRecording"]],
+        play_handler: Callable[..., Awaitable["Playback"]],
         obj: dict
     ) -> "Bridge":
         bridge = cls.model_validate(obj)
         bridge.__stop_handler = stop_handler
         bridge.__add_channel_handler = add_channel_handler
         bridge.__record_handler = record_handler
+        bridge.__play_handler = play_handler
         return bridge
+
+    def add_handlers(
+        self,
+        stop_handler: Callable[[str], Awaitable[None]],
+        add_channel_handler: Callable[[str, str], Awaitable[None]],
+        record_handler: Callable[..., Awaitable["LiveRecording"]],
+        play_handler: Callable[..., Awaitable["Playback"]],
+    ):
+        self.__stop_handler = stop_handler
+        self.__add_channel_handler = add_channel_handler
+        self.__record_handler = record_handler
+        self.__play_handler = play_handler
     
     async def stop(self):
         if self.__stop_handler is None:
@@ -70,6 +84,42 @@ class Bridge(BaseModel):
         if self.__add_channel_handler is None:
             raise ValueError("Add channel handler not set")
         await self.__add_channel_handler(self.id, channel_id)
+
+    async def play(
+        self,
+        media: str | list[str],
+        lang: Optional[str] = None,
+        offsetms: Optional[int] = None,
+        skipms: Optional[int] = None,
+        playback_id: Optional[str] = None,
+        announcer_format: Optional[str] = None,
+    ) -> "Playback":
+        """
+        Start playback of media on this bridge.
+
+        Args:
+            media: Media URIs to play (e.g. "sound:hello-world", "tone:ring")
+            lang: For sounds, selects language for playback
+            offsetms: Number of milliseconds to skip before playing
+            skipms: Number of milliseconds to skip for forward/reverse operations
+            playback_id: Playback ID to use for controlling this playback
+            announcer_format: Format of the Announcer channel attached to the bridge.
+                Defaults to the format of the channel in the bridge with the highest sample rate.
+
+        Returns:
+            Playback: The playback object
+        """
+        if self.__play_handler is None:
+            raise ValueError("Play handler not set")
+        return await self.__play_handler(
+            bridge_id=self.id,
+            media=media,
+            lang=lang,
+            offsetms=offsetms,
+            skipms=skipms,
+            playback_id=playback_id,
+            announcer_format=announcer_format,
+        )
 
     async def record(
         self,

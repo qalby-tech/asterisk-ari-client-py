@@ -6,6 +6,7 @@ import re
 
 if TYPE_CHECKING:
     from .recording import LiveRecording
+    from .playback import Playback
 
 
 class CallerID(BaseModel):
@@ -44,6 +45,7 @@ class Channel(BaseModel):
     __send_dtmf_handler: Optional[Callable[..., Awaitable[None]]] = PrivateAttr(default=None)
     __redirect_handler: Optional[Callable[..., Awaitable[None]]] = PrivateAttr(default=None)
     __move_handler: Optional[Callable[..., Awaitable[None]]] = PrivateAttr(default=None)
+    __play_handler: Optional[Callable[..., Awaitable["Playback"]]] = PrivateAttr(default=None)
 
     @field_validator("creationtime", mode="after")
     @classmethod
@@ -66,6 +68,7 @@ class Channel(BaseModel):
         send_dtmf_handler: Callable[..., Awaitable[None]],
         redirect_handler: Callable[..., Awaitable[None]],
         move_handler: Callable[..., Awaitable[None]],
+        play_handler: Callable[..., Awaitable["Playback"]],
         obj: dict
     ) -> "Channel":
         channel = cls.model_validate(obj)
@@ -77,6 +80,7 @@ class Channel(BaseModel):
         channel.__send_dtmf_handler = send_dtmf_handler
         channel.__redirect_handler = redirect_handler
         channel.__move_handler = move_handler
+        channel.__play_handler = play_handler
         return channel
     
     def add_handlers(
@@ -89,6 +93,7 @@ class Channel(BaseModel):
         send_dtmf_handler: Callable[..., Awaitable[None]],
         redirect_handler: Callable[..., Awaitable[None]],
         move_handler: Callable[..., Awaitable[None]],
+        play_handler: Callable[..., Awaitable["Playback"]],
     ):
         """Add handlers to the channel for performing actions"""
         self.__answer_handler = answer_handler
@@ -99,6 +104,7 @@ class Channel(BaseModel):
         self.__send_dtmf_handler = send_dtmf_handler
         self.__redirect_handler = redirect_handler
         self.__move_handler = move_handler
+        self.__play_handler = play_handler
 
     async def answer(self):
         if self.__answer_handler is None:
@@ -260,4 +266,36 @@ class Channel(BaseModel):
             channel_id=self.id,
             app=app,
             app_args=app_args,
+        )
+
+    async def play(
+        self,
+        media: str | list[str],
+        lang: Optional[str] = None,
+        offsetms: Optional[int] = None,
+        skipms: Optional[int] = None,
+        playback_id: Optional[str] = None,
+    ) -> "Playback":
+        """
+        Start playback of media on this channel.
+
+        Args:
+            media: Media URIs to play (e.g. "sound:hello-world", "tone:ring")
+            lang: For sounds, selects language for playback
+            offsetms: Number of milliseconds to skip before playing
+            skipms: Number of milliseconds to skip for forward/reverse operations
+            playback_id: Playback ID to use for controlling this playback
+
+        Returns:
+            Playback: The playback object
+        """
+        if self.__play_handler is None:
+            raise ValueError("Play handler not set")
+        return await self.__play_handler(
+            channel_id=self.id,
+            media=media,
+            lang=lang,
+            offsetms=offsetms,
+            skipms=skipms,
+            playback_id=playback_id,
         )

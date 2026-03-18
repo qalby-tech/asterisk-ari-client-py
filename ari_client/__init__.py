@@ -1,22 +1,96 @@
 from .ari_client import AriClient
-from .models.events import Event, EventType
-from .models.events import StasisStartEvent, StasisEndEvent, ChannelDtmfReceivedEvent
+from .models.events import (
+    Event,
+    EventType,
+    EVENT_MODEL_MAP,
+    StasisStartEvent,
+    StasisEndEvent,
+    BridgeAttendedTransferEvent,
+    BridgeBlindTransferEvent,
+    BridgeCreatedEvent,
+    BridgeDestroyedEvent,
+    BridgeMergedEvent,
+    BridgeVideoSourceChangedEvent,
+    ChannelCallerIdEvent,
+    ChannelConnectedLineEvent,
+    ChannelCreatedEvent,
+    ChannelDestroyedEvent,
+    ChannelDialplanEvent,
+    ChannelDtmfReceivedEvent,
+    ChannelEnteredBridgeEvent,
+    ChannelHangupRequestEvent,
+    ChannelHoldEvent,
+    ChannelLeftBridgeEvent,
+    ChannelStateChangeEvent,
+    ChannelTalkingFinishedEvent,
+    ChannelTalkingStartedEvent,
+    ChannelToneDetectedEvent,
+    ChannelUnholdEvent,
+    ChannelUsereventEvent,
+    ChannelVarsetEvent,
+    DialEvent,
+    PlaybackContinuingEvent,
+    PlaybackFinishedEvent,
+    PlaybackStartedEvent,
+    RecordingFailedEvent,
+    RecordingFinishedEvent,
+    RecordingStartedEvent,
+)
 from .models.bridge import Bridge, BridgeType, VideoMode
 from .models.channels import Channel, CallerID, DialplanCEP
 from .models.recording import LiveRecording
+from .models.playback import Playback
 
 __all__ = [
     "AriClient",
-    "Event", 
-    "EventType", 
-    "StasisStartEvent", 
-    "StasisEndEvent", 
+    "Event",
+    "EventType",
+    "EVENT_MODEL_MAP",
+    # Stasis
+    "StasisStartEvent",
+    "StasisEndEvent",
+    # Bridge events
+    "BridgeAttendedTransferEvent",
+    "BridgeBlindTransferEvent",
+    "BridgeCreatedEvent",
+    "BridgeDestroyedEvent",
+    "BridgeMergedEvent",
+    "BridgeVideoSourceChangedEvent",
+    # Channel events
+    "ChannelCallerIdEvent",
+    "ChannelConnectedLineEvent",
+    "ChannelCreatedEvent",
+    "ChannelDestroyedEvent",
+    "ChannelDialplanEvent",
     "ChannelDtmfReceivedEvent",
-    "Bridge", 
-    "BridgeType", 
-    "VideoMode", 
-    "Channel", 
-    "CallerID", 
+    "ChannelEnteredBridgeEvent",
+    "ChannelHangupRequestEvent",
+    "ChannelHoldEvent",
+    "ChannelLeftBridgeEvent",
+    "ChannelStateChangeEvent",
+    "ChannelTalkingFinishedEvent",
+    "ChannelTalkingStartedEvent",
+    "ChannelToneDetectedEvent",
+    "ChannelUnholdEvent",
+    "ChannelUsereventEvent",
+    "ChannelVarsetEvent",
+    # Dial
+    "DialEvent",
+    # Playback events
+    "PlaybackContinuingEvent",
+    "PlaybackFinishedEvent",
+    "PlaybackStartedEvent",
+    # Recording events
+    "RecordingFailedEvent",
+    "RecordingFinishedEvent",
+    "RecordingStartedEvent",
+    # Models
+    "Bridge",
+    "BridgeType",
+    "VideoMode",
+    "Channel",
+    "CallerID",
     "DialplanCEP",
-    "LiveRecording"
+    "LiveRecording",
+    "Playback",
 ]
