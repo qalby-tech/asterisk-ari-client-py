@@ -10,6 +10,11 @@ dependencies = [
     "websockets>=15.0.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/qalby-tech/asterisk-ari-client-py"
+Source = "https://github.com/qalby-tech/asterisk-ari-client-py"
+Issues = "https://github.com/qalby-tech/asterisk-ari-client-py/issues"
+
 
 [dependency-groups]
 dev = [
