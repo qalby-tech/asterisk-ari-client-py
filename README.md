@@ -1,5 +1,7 @@
 # ARI Client Library
 
+[![PyPI](https://img.shields.io/pypi/v/ari-client)](https://pypi.org/project/ari-client/)
+
 A Python client library for Asterisk REST Interface (ARI) that provides an object-oriented approach to managing channels, bridges, playbacks, recordings, and events.
 
 ## Architecture
@@ -18,10 +20,12 @@ The library follows a clean architecture pattern with separation of concerns:
 
 ## Installation
 
+Available on [PyPI](https://pypi.org/project/ari-client/):
+
 ```bash
-pip install asterisk-ari-client
+pip install ari-client
 # or using uv
-uv add asterisk-ari-client
+uv add ari-client
 # or from source
 uv sync
 ```
